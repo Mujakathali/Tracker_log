@@ -1,38 +1,290 @@
+* {
+    box-sizing: border-box;
+}
+
 body {
-  font-family: system-ui, sans-serif;
-  margin: 0;
-  padding: 8px;
-  width: 320px;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    margin: 0;
+    padding: 0;
+    width: 420px;
+    height: 400px;
+    background: #f8fafc;
+    color: #0f172a;
 }
 
-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
 }
 
-#sites {
-  margin-top: 8px;
-  max-height: 300px;
-  overflow-y: auto;
+/* Header */
+.popup-header {
+    background: linear-gradient(135deg, #2563eb, #4f46e5);
+    color: white;
+    padding: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-#siteList {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+.popup-header h1 {
+    margin: 0 0 8px 0;
+    font-size: 18px;
+    font-weight: 600;
 }
 
-#siteList li {
-  display: flex;
-  justify-content: space-between;
-  padding: 4px 0;
-  border-bottom: 1px solid #eee;
+.header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
 }
 
-#siteList li span.domain {
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.pause-btn {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.pause-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.header-summary {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+}
+
+.summary-item {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.summary-label {
+    opacity: 0.9;
+}
+
+.summary-value {
+    font-weight: 600;
+    font-family: "JetBrains Mono", monospace;
+}
+
+/* Controls */
+.controls-section {
+    background: white;
+    padding: 8px 10px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.controls-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+
+.control-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+.control-select {
+    padding: 4px 6px;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    font-size: 11px;
+    background: white;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    min-width: 80px;
+}
+
+.control-select:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.1);
+}
+
+.search-group {
+    flex: 1;
+    min-width: 120px;
+}
+
+.search-input {
+    width: 100%;
+    padding: 4px 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    font-size: 11px;
+    transition: border-color 0.2s;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.1);
+}
+
+/* Sites Section */
+.sites-section {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px;
+}
+
+.site-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* Site Card */
+.site-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    padding: 6px 8px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.site-card:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+    transform: translateY(-1px);
+}
+
+.site-icon-wrapper {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    background: #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.site-icon {
+    width: 14px;
+    height: 14px;
+}
+
+.site-icon--hidden {
+    display: none;
+}
+
+.site-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.site-domain {
+    font-size: 11px;
+    font-weight: 600;
+    color: #0f172a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.site-meta {
+    font-size: 9px;
+    color: #64748b;
+    display: flex;
+    gap: 4px;
+}
+
+.site-time {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    font-weight: 600;
+    color: #2563eb;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.site-visits {
+    font-size: 9px;
+    color: #94a3b8;
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #94a3b8;
+    font-size: 13px;
+}
+
+/* Footer */
+.popup-footer {
+    background: white;
+    border-top: 1px solid #e2e8f0;
+    padding: 6px 10px;
+    text-align: center;
+}
+
+.options-link-btn {
+    background: #f1f5f9;
+    color: #2563eb;
+    border: 1px solid #cbd5e1;
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.options-link-btn:hover {
+    background: #e2e8f0;
+    border-color: #2563eb;
+}
+
+/* Scrollbar styling */
+.sites-section::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sites-section::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sites-section::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+.sites-section::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
 }

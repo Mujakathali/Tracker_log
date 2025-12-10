@@ -7,18 +7,68 @@
 </head>
 <body>
   <div id="app">
-    <header>
-      <h1>TimeKeeper</h1>
-      <button id="pauseBtn">Pause</button>
+    <header class="popup-header">
+      <div class="header-top">
+        <h1>TimeKeeper</h1>
+        <button id="pauseBtn" class="pause-btn">Pause</button>
+      </div>
+      <div class="header-summary">
+        <div class="summary-item">
+          <span class="summary-label">Total:</span>
+          <span id="totalTime" class="summary-value">--:--:--</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Status:</span>
+          <span id="status" class="summary-value">Loading...</span>
+        </div>
+      </div>
     </header>
-    <section id="summary">
-      <div>Today total: <span id="totalTime">--:--:--</span></div>
-      <div>Status: <span id="status">Loading...</span></div>
+
+    <section id="controls" class="controls-section">
+      <div class="controls-row">
+        <div class="control-group">
+          <label for="timeRange" class="control-label">Range:</label>
+          <select id="timeRange" class="control-select">
+            <option value="today">Today</option>
+            <option value="7days">Last 7 days</option>
+            <option value="30days">Last 30 days</option>
+            <option value="all">All time</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label for="sortBy" class="control-label">Sort:</label>
+          <select id="sortBy" class="control-select">
+            <option value="time-desc">Time (high to low)</option>
+            <option value="time-asc">Time (low to high)</option>
+            <option value="name-asc">Name (A-Z)</option>
+            <option value="visits-desc">Visits (high to low)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="controls-row">
+        <div class="control-group search-group">
+          <input
+            type="text"
+            id="searchBox"
+            class="search-input"
+            placeholder="Search sites..."
+          />
+        </div>
+      </div>
     </section>
-    <section id="sites">
-      <h2>Today’s sites</h2>
-      <ul id="siteList"></ul>
+
+    <section id="sites" class="sites-section">
+      <div id="siteList" class="site-list"></div>
+      <div id="emptyState" class="empty-state" style="display: none;">
+        No sites found. Start browsing to see your usage.
+      </div>
     </section>
+
+    <footer class="popup-footer">
+      <button id="openOptionsBtn" class="options-link-btn">View full dashboard →</button>
+    </footer>
   </div>
   <script src="popup.js"></script>
 </body>

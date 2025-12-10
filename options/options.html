@@ -6,29 +6,115 @@
   <link rel="stylesheet" href="options.css" />
 </head>
 <body>
-  <h1>TimeKeeper Settings</h1>
+  <div class="page">
+    <header class="page-header">
+      <div>
+        <h1>TimeKeeper Settings</h1>
+        <p class="subtitle">
+          Configure tracking and explore which sites you spend the most time on.
+        </p>
+      </div>
+    </header>
 
-  <section>
-    <label>
-      Idle timeout (seconds):
-      <input type="number" id="idleTimeout" min="10" step="10" />
-    </label>
-  </section>
+    <main class="page-main">
+      <!-- General settings -->
+      <section class="card">
+        <h2 class="card-title">General</h2>
+        <p class="card-description">
+          Control how TimeKeeper detects inactivity and tracks your browsing.
+        </p>
 
-  <section>
-    <button id="saveBtn">Save Settings</button>
-    <span id="status"></span>
-  </section>
+        <div class="field-row">
+          <label class="field-label" for="idleTimeout">
+            Idle timeout (seconds)
+          </label>
+          <input
+            type="number"
+            id="idleTimeout"
+            min="10"
+            step="10"
+            class="field-input"
+          />
+        </div>
 
-  <hr />
+        <div class="actions-row">
+          <button id="saveBtn" class="primary-button">Save settings</button>
+          <span id="status" class="status-text"></span>
+        </div>
+      </section>
 
-  <section>
-    <h2>Export / Import</h2>
-    <button id="exportJsonBtn">Export JSON</button>
-    <button id="exportCsvBtn">Export CSV</button>
-    <br /><br />
-    <input type="file" id="importFile" accept=".json" />
-  </section>
+      <!-- Export / Import -->
+      <section class="card">
+        <h2 class="card-title">Export &amp; Import</h2>
+        <p class="card-description">
+          Backup your data or move it between devices.
+        </p>
+
+        <div class="export-actions">
+          <button id="exportJsonBtn" class="secondary-button">
+            Export JSON
+          </button>
+          <button id="exportCsvBtn" class="secondary-button">
+            Export CSV
+          </button>
+        </div>
+
+        <div class="import-row">
+          <label class="field-label">
+            Import from JSON
+            <input type="file" id="importFile" accept=".json" />
+          </label>
+        </div>
+      </section>
+
+      <!-- Tracked sites with icons -->
+      <section class="card usage-section">
+        <div class="usage-header">
+          <div>
+            <h2 class="card-title">Tracked sites</h2>
+            <p class="card-description">
+              All domains based on your total recorded time. Use filters to explore your data.
+            </p>
+          </div>
+        </div>
+
+        <div class="usage-controls">
+          <div class="control-group">
+            <label for="usageTimeRange" class="control-label">Range:</label>
+            <select id="usageTimeRange" class="control-select">
+              <option value="all">All time</option>
+              <option value="30days">Last 30 days</option>
+              <option value="7days">Last 7 days</option>
+              <option value="today">Today</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label for="usageSortBy" class="control-label">Sort:</label>
+            <select id="usageSortBy" class="control-select">
+              <option value="time-desc">Time (high to low)</option>
+              <option value="time-asc">Time (low to high)</option>
+              <option value="name-asc">Name (A-Z)</option>
+              <option value="visits-desc">Visits (high to low)</option>
+            </select>
+          </div>
+
+          <div class="control-group search-group">
+            <input
+              type="text"
+              id="usageSearchBox"
+              class="search-input"
+              placeholder="Search sites..."
+            />
+          </div>
+        </div>
+
+        <div id="usageGrid" class="usage-grid">
+          <!-- Filled dynamically from options.js -->
+        </div>
+      </section>
+    </main>
+  </div>
 
   <script src="options.js"></script>
 </body>
