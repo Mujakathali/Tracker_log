@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>TimeKeeper Settings</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <h1>TimeKeeper Settings</h1>
+
+  <section>
+    <label>
+      Idle timeout (seconds):
+      <input type="number" id="idleTimeout" min="10" step="10" />
+    </label>
+  </section>
+
+  <section>
+    <button id="saveBtn">Save Settings</button>
+    <span id="status"></span>
+  </section>
+
+  <hr />
+
+  <section>
+    <h2>Export / Import</h2>
+    <button id="exportJsonBtn">Export JSON</button>
+    <button id="exportCsvBtn">Export CSV</button>
+    <br /><br />
+    <input type="file" id="importFile" accept=".json" />
+  </section>
+
+  <script src="options.js"></script>
+</body>
+</html>

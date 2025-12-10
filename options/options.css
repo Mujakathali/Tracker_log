@@ -1,0 +1,14 @@
+body {
+  font-family: system-ui, sans-serif;
+  padding: 16px;
+  max-width: 640px;
+}
+
+section {
+  margin-bottom: 16px;
+}
+
+#status {
+  margin-left: 8px;
+  color: green;
+}

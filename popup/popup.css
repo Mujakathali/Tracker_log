@@ -1,0 +1,38 @@
+body {
+  font-family: system-ui, sans-serif;
+  margin: 0;
+  padding: 8px;
+  width: 320px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+#sites {
+  margin-top: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+#siteList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+#siteList li {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-bottom: 1px solid #eee;
+}
+
+#siteList li span.domain {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>TimeKeeper</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>TimeKeeper</h1>
+      <button id="pauseBtn">Pause</button>
+    </header>
+    <section id="summary">
+      <div>Today total: <span id="totalTime">--:--:--</span></div>
+      <div>Status: <span id="status">Loading...</span></div>
+    </section>
+    <section id="sites">
+      <h2>Today’s sites</h2>
+      <ul id="siteList"></ul>
+    </section>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
