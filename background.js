@@ -10,197 +10,258 @@ const TK_FLUSH_INTERVAL_MIN = 1;
 
 // Init
 chrome.runtime.onInstalled.addListener(async () => {
-  tkSettings = await tkGetSettings();
-  await chrome.alarms.create(TK_FLUSH_ALARM, {
-    periodInMinutes: TK_FLUSH_INTERVAL_MIN
-  });
-  chrome.idle.setDetectionInterval(tkSettings.idleTimeoutSeconds || 60);
+    tkSettings = await tkGetSettings();
+    await chrome.alarms.create(TK_FLUSH_ALARM, {
+        periodInMinutes: TK_FLUSH_INTERVAL_MIN
+    });
+    chrome.idle.setDetectionInterval(tkSettings.idleTimeoutSeconds || 60);
 });
 
 chrome.runtime.onStartup.addListener(async () => {
-  tkSettings = await tkGetSettings();
+    tkSettings = await tkGetSettings();
 });
 
 // Alarms
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === TK_FLUSH_ALARM) {
-    await tkFlushStats();
-  }
+    if (alarm.name === TK_FLUSH_ALARM) {
+        await tkFlushStats();
+        await tkEnforceActiveTabConstraint();
+    }
 });
 
-// Tabs / windows events
+// Tabs / windows events with constraint checks
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
-  await tkSwitchActiveTab(activeInfo.tabId);
+    const tab = await chrome.tabs.get(activeInfo.tabId).catch(() => null);
+    if (tab && tab.url) {
+        const blocked = await tkCheckConstraint(tab.url, activeInfo.tabId);
+        if (blocked) return;
+    }
+    await tkSwitchActiveTab(activeInfo.tabId);
 });
 
 chrome.windows.onFocusChanged.addListener(async (windowId) => {
-  if (windowId === chrome.windows.WINDOW_ID_NONE) {
-    await tkCloseCurrentSession();
-    return;
-  }
-  const [tab] = await chrome.tabs.query({
-    active: true,
-    windowId
-  });
-  if (tab) {
-    await tkSwitchActiveTab(tab.id);
-  } else {
-    await tkCloseCurrentSession();
-  }
+    if (windowId === chrome.windows.WINDOW_ID_NONE) {
+        await tkCloseCurrentSession();
+        return;
+    }
+    const [tab] = await chrome.tabs.query({
+        active: true,
+        windowId
+    });
+    if (tab) {
+        await tkSwitchActiveTab(tab.id);
+    } else {
+        await tkCloseCurrentSession();
+    }
 });
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (!tkCurrentSession || tkCurrentSession.tabId !== tabId) return;
-  if (changeInfo.url) {
-    await tkSwitchActiveTab(tabId);
-  }
+    if (!tkCurrentSession || tkCurrentSession.tabId !== tabId) return;
+    if (changeInfo.url) {
+        const blocked = await tkCheckConstraint(changeInfo.url, tabId);
+        if (!blocked) {
+            await tkSwitchActiveTab(tabId);
+        }
+    }
 });
 
 chrome.tabs.onRemoved.addListener(async (tabId) => {
-  if (tkCurrentSession && tkCurrentSession.tabId === tabId) {
-    await tkCloseCurrentSession();
-  }
+    if (tkCurrentSession && tkCurrentSession.tabId === tabId) {
+        await tkCloseCurrentSession();
+    }
 });
+
+// --- Time constraint enforcement ---
+async function tkCheckConstraint(url, tabId) {
+    if (!url) return false;
+    if (url.startsWith('chrome://') || url.startsWith('chrome-extension://')) return false;
+    const domain = tkParseDomain(url);
+
+    // Ensure latest stats before enforcing
+    await tkFlushStats();
+
+    const data = await chrome.storage.local.get(['timeConstraints', 'siteStats']);
+    const constraints = data.timeConstraints || {};
+    const constraint = constraints[domain];
+    if (!constraint || !constraint.enabled) return false;
+
+    const todayKey = tkTodayKey();
+    const siteStats = data.siteStats || {};
+    const todayData = siteStats[todayKey] || {};
+    let usedSeconds = todayData[domain]?.seconds || 0;
+    // include in-progress session time for the same domain
+    if (tkCurrentSession && tkCurrentSession.domain === domain) {
+        const delta = Math.floor((Date.now() - tkCurrentSession.start) / 1000);
+        if (delta > 0) usedSeconds += delta;
+    }
+    const limitSeconds = constraint.limit * (constraint.unit === 'hours' ? 3600 : 60);
+
+    if (usedSeconds >= limitSeconds) {
+        // stop current session so it won't keep accruing
+        await tkCloseCurrentSession();
+        await tkFlushStats();
+        const blockedUrl = chrome.runtime.getURL(`blocked.html?domain=${encodeURIComponent(domain)}`);
+        await chrome.tabs.update(tabId, { url: blockedUrl });
+        chrome.notifications.create({
+            type: 'basic',
+            iconUrl: 'icons/icon48.png',
+            title: 'Time up — bye bye!',
+            message: `You've reached your daily limit for ${domain}. Come back tomorrow.`,
+            priority: 2
+        });
+        return true;
+    }
+    return false;
+}
+
+async function tkEnforceActiveTabConstraint() {
+    const [tab] = await chrome.tabs.query({
+        active: true,
+        lastFocusedWindow: true
+    });
+    if (!tab || !tab.url) return false;
+    return tkCheckConstraint(tab.url, tab.id);
+}
 
 // Idle detection
 chrome.idle.onStateChanged.addListener(async (state) => {
-  if (state === 'active') {
-    tkIsIdle = false;
-    const [tab] = await chrome.tabs.query({
-      active: true,
-      lastFocusedWindow: true
-    });
-    if (tab) await tkSwitchActiveTab(tab.id);
-  } else {
-    tkIsIdle = true;
-    await tkCloseCurrentSession();
-  }
+    if (state === 'active') {
+        tkIsIdle = false;
+        const [tab] = await chrome.tabs.query({
+            active: true,
+            lastFocusedWindow: true
+        });
+        if (tab) await tkSwitchActiveTab(tab.id);
+    } else {
+        tkIsIdle = true;
+        await tkCloseCurrentSession();
+    }
 });
 
 // Messages (pause/resume, debug, export helpers)
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  (async () => {
-    if (msg.type === 'TK_GET_TODAY_STATS') {
-      const siteStats = await tkGetSiteStats();
-      sendResponse({
-        todayKey: tkTodayKey(),
-        siteStats,
-        settings: await tkGetSettings()
-      });
-    } else if (msg.type === 'TK_SET_PAUSED') {
-      const settings = await tkGetSettings();
-      settings.trackingPaused = !!msg.paused;
-      await tkSetSettings(settings);
-      tkSettings = settings;
-      if (settings.trackingPaused) {
-        await tkCloseCurrentSession();
-      } else {
-        const [tab] = await chrome.tabs.query({
-          active: true,
-          lastFocusedWindow: true
-        });
-        if (tab) await tkSwitchActiveTab(tab.id);
-      }
-      sendResponse({ success: true, settings });
-    } else if (msg.type === 'TK_GET_SETTINGS') {
-      sendResponse({ settings: await tkGetSettings() });
-    } else if (msg.type === 'TK_SET_SETTINGS') {
-      const merged = { ...(await tkGetSettings()), ...(msg.settings || {}) };
-      await tkSetSettings(merged);
-      tkSettings = merged;
-      if (msg.settings && msg.settings.idleTimeoutSeconds) {
-        chrome.idle.setDetectionInterval(msg.settings.idleTimeoutSeconds);
-      }
-      sendResponse({ success: true, settings: merged });
-    } else if (msg.type === 'TK_EXPORT_ALL') {
-      const all = await tkGetAll();
-      sendResponse({ data: all });
-    }
-  })();
-  return true; // keep message channel open for async
+    (async () => {
+        if (msg.type === 'TK_GET_TODAY_STATS') {
+            const siteStats = await tkGetSiteStats();
+            sendResponse({
+                todayKey: tkTodayKey(),
+                siteStats,
+                settings: await tkGetSettings()
+            });
+        } else if (msg.type === 'TK_SET_PAUSED') {
+            const settings = await tkGetSettings();
+            settings.trackingPaused = !!msg.paused;
+            await tkSetSettings(settings);
+            tkSettings = settings;
+            if (settings.trackingPaused) {
+                await tkCloseCurrentSession();
+            } else {
+                const [tab] = await chrome.tabs.query({
+                    active: true,
+                    lastFocusedWindow: true
+                });
+                if (tab) await tkSwitchActiveTab(tab.id);
+            }
+            sendResponse({ success: true, settings });
+        } else if (msg.type === 'TK_GET_SETTINGS') {
+            sendResponse({ settings: await tkGetSettings() });
+        } else if (msg.type === 'TK_SET_SETTINGS') {
+            const merged = { ...(await tkGetSettings()), ...(msg.settings || {}) };
+            await tkSetSettings(merged);
+            tkSettings = merged;
+            if (msg.settings && msg.settings.idleTimeoutSeconds) {
+                chrome.idle.setDetectionInterval(msg.settings.idleTimeoutSeconds);
+            }
+            sendResponse({ success: true, settings: merged });
+        } else if (msg.type === 'TK_EXPORT_ALL') {
+            const all = await tkGetAll();
+            sendResponse({ data: all });
+        }
+    })();
+    return true; // keep message channel open for async
 });
 
 // Core tracking
 async function tkSwitchActiveTab(tabId) {
-  await tkCloseCurrentSession();
-  if (tkIsIdle) return;
-  if (!tabId && tabId !== 0) return;
+    await tkCloseCurrentSession();
+    if (tkIsIdle) return;
+    if (!tabId && tabId !== 0) return;
 
-  const tab = await chrome.tabs.get(tabId).catch(() => null);
-  if (!tab || !tab.url) return;
-  if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) return;
+    const tab = await chrome.tabs.get(tabId).catch(() => null);
+    if (!tab || !tab.url) return;
+    if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) return;
 
-  const settings = tkSettings || (await tkGetSettings());
-  if (settings.trackingPaused) return;
+    const settings = tkSettings || (await tkGetSettings());
+    if (settings.trackingPaused) return;
 
-  const domain = tkParseDomain(tab.url);
-  tkCurrentSession = {
-    start: Date.now(),
-    tabId,
-    domain,
-    url: tab.url
-  };
-  await tkSetLastActive({
-    tabId,
-    domain,
-    url: tab.url,
-    startTimestamp: tkCurrentSession.start
-  });
+    const domain = tkParseDomain(tab.url);
+    tkCurrentSession = {
+        start: Date.now(),
+        tabId,
+        domain,
+        url: tab.url
+    };
+    await tkSetLastActive({
+        tabId,
+        domain,
+        url: tab.url,
+        startTimestamp: tkCurrentSession.start
+    });
 }
 
 async function tkCloseCurrentSession() {
-  if (!tkCurrentSession) return;
-  const now = Date.now();
-  const durationSec = Math.floor((now - tkCurrentSession.start) / 1000);
-  if (durationSec > 0) {
-    tkAddToStats(tkCurrentSession.domain, durationSec, tkCurrentSession.url);
-  }
-  tkCurrentSession = null;
-  await tkFlushStats();
+    if (!tkCurrentSession) return;
+    const now = Date.now();
+    const durationSec = Math.floor((now - tkCurrentSession.start) / 1000);
+    if (durationSec > 0) {
+        tkAddToStats(tkCurrentSession.domain, durationSec, tkCurrentSession.url);
+    }
+    tkCurrentSession = null;
+    await tkFlushStats();
 }
 
 function tkAddToStats(domain, seconds, url) {
-  const dateKey = tkTodayKey();
-  if (!tkInMemoryStats[dateKey]) tkInMemoryStats[dateKey] = {};
-  if (!tkInMemoryStats[dateKey][domain]) {
-    tkInMemoryStats[dateKey][domain] = {
-      seconds: 0,
-      visits: 0,
-      pages: {}
-    };
-  }
-  const entry = tkInMemoryStats[dateKey][domain];
-  entry.seconds += seconds;
-  entry.visits += 1;
-  entry.pages[url] = (entry.pages[url] || 0) + seconds;
+    const dateKey = tkTodayKey();
+    if (!tkInMemoryStats[dateKey]) tkInMemoryStats[dateKey] = {};
+    if (!tkInMemoryStats[dateKey][domain]) {
+        tkInMemoryStats[dateKey][domain] = {
+            seconds: 0,
+            visits: 0,
+            pages: {}
+        };
+    }
+    const entry = tkInMemoryStats[dateKey][domain];
+    entry.seconds += seconds;
+    entry.visits += 1;
+    entry.pages[url] = (entry.pages[url] || 0) + seconds;
 }
 
 async function tkFlushStats() {
-  const memKeys = Object.keys(tkInMemoryStats);
-  if (!memKeys.length) return;
+    const memKeys = Object.keys(tkInMemoryStats);
+    if (!memKeys.length) return;
 
-  const existingStats = await tkGetSiteStats();
-  for (const dateKey of memKeys) {
-    existingStats[dateKey] = existingStats[dateKey] || {};
-    const dayMem = tkInMemoryStats[dateKey];
-    for (const domain of Object.keys(dayMem)) {
-      if (!existingStats[dateKey][domain]) {
-        existingStats[dateKey][domain] = {
-          seconds: 0,
-          visits: 0,
-          pages: {}
-        };
-      }
-      const target = existingStats[dateKey][domain];
-      const src = dayMem[domain];
-      target.seconds += src.seconds;
-      target.visits += src.visits;
-      for (const url of Object.keys(src.pages)) {
-        target.pages[url] = (target.pages[url] || 0) + src.pages[url];
-      }
+    const existingStats = await tkGetSiteStats();
+    for (const dateKey of memKeys) {
+        existingStats[dateKey] = existingStats[dateKey] || {};
+        const dayMem = tkInMemoryStats[dateKey];
+        for (const domain of Object.keys(dayMem)) {
+            if (!existingStats[dateKey][domain]) {
+                existingStats[dateKey][domain] = {
+                    seconds: 0,
+                    visits: 0,
+                    pages: {}
+                };
+            }
+            const target = existingStats[dateKey][domain];
+            const src = dayMem[domain];
+            target.seconds += src.seconds;
+            target.visits += src.visits;
+            for (const url of Object.keys(src.pages)) {
+                target.pages[url] = (target.pages[url] || 0) + src.pages[url];
+            }
+        }
     }
-  }
 
-  tkInMemoryStats = {};
-  await tkSetSiteStats(existingStats);
+    tkInMemoryStats = {};
+    await tkSetSiteStats(existingStats);
 }

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Access blocked</title>
+  <style>
+    body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background:#0f172a; color:#e2e8f0; display:flex; align-items:center; justify-content:center; height:100vh; }
+    .card { background:#111827; border:1px solid #1f2937; border-radius:12px; padding:24px 28px; max-width:360px; width:90%; text-align:center; box-shadow:0 12px 40px rgba(0,0,0,0.35); }
+    h1 { margin:0 0 8px; font-size:20px; color:#f87171; }
+    p { margin:0 0 12px; color:#cbd5e1; }
+    .domain { font-weight:700; color:#93c5fd; }
+    .note { font-size:12px; color:#94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Time limit reached</h1>
+    <p>You’ve hit your daily limit for <span class="domain" id="blockedDomain"></span>.</p>
+    <p class="note">Come back tomorrow to use this site again.</p>
+  </div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    document.getElementById('blockedDomain').textContent = params.get('domain') || 'this site';
+  </script>
+</body>
+</html>

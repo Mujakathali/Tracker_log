@@ -191,88 +191,298 @@ function renderUsageGrid(siteStats, rangeType, sortBy, searchTerm) {
     });
 }
 
+/* ---------- Constraints & Stats ---------- */
+
+async function getConstraints() {
+    const data = await chrome.storage.local.get(['timeConstraints']);
+    return data.timeConstraints || {};
+}
+
+async function setConstraints(constraints) {
+    await chrome.storage.local.set({ timeConstraints: constraints });
+}
+
+async function getTodayUsage() {
+    const all = await getAllData();
+    const todayKey = getDateKey(0);
+    const siteStats = all.data?.siteStats || {};
+    const todayData = siteStats[todayKey] || {};
+    const usage = {};
+    for (const [domain, info] of Object.entries(todayData)) {
+        usage[domain] = info.seconds || 0;
+    }
+    return usage;
+}
+
+function constraintStatus(constraint, usageSeconds) {
+    const limitSeconds = constraint.limit * (constraint.unit === 'hours' ? 3600 : 60);
+    if (!constraint.enabled) return 'paused';
+    if (usageSeconds >= limitSeconds) return 'exceeded';
+    if (usageSeconds >= limitSeconds * 0.8) return 'warning';
+    return 'active';
+}
+
+function renderConstraints(constraints, usageMap) {
+    const container = document.getElementById('constraintsList');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const entries = Object.entries(constraints);
+    if (!entries.length) {
+        container.innerHTML = `<div class="empty-state"><p>No time constraints yet. Add one below.</p></div>`;
+        return;
+    }
+
+    entries.forEach(([domain, c]) => {
+        const used = usageMap[domain] || 0;
+        const limitSec = c.limit * (c.unit === 'hours' ? 3600 : 60);
+        const pct = Math.min(100, Math.round((used / limitSec) * 100));
+        const status = constraintStatus(c, used);
+
+        const item = document.createElement('div');
+        item.className = 'constraint-item';
+        item.innerHTML = `
+          <div class="constraint-header">
+            <div class="constraint-domain">
+              <img src="${getFaviconUrl(domain)}" alt="" class="constraint-icon" onerror="this.style.display='none'">
+              <span>${domain}</span>
+            </div>
+            <div class="constraint-status ${status}">${status}</div>
+          </div>
+          <div class="constraint-progress">
+            <div class="progress-bar">
+              <div class="progress-fill ${status}" style="width:${pct}%"></div>
+            </div>
+            <div class="progress-text">${formatSeconds(used)} / ${c.limit} ${c.unit}</div>
+          </div>
+          <div class="constraint-controls">
+            <div class="constraint-input-group">
+              <input type="number" class="constraint-input" data-domain="${domain}" data-field="limit" min="1" max="24" value="${c.limit}">
+              <select class="constraint-select" data-domain="${domain}" data-field="unit">
+                <option value="minutes" ${c.unit === 'minutes' ? 'selected' : ''}>Minutes</option>
+                <option value="hours" ${c.unit === 'hours' ? 'selected' : ''}>Hours</option>
+              </select>
+            </div>
+            <div class="constraint-toggle ${c.enabled ? 'active' : ''}" data-domain="${domain}" data-field="enabled"></div>
+            <button class="constraint-delete" data-domain="${domain}">Remove</button>
+          </div>
+        `;
+        container.appendChild(item);
+    });
+
+    // Wire events
+    container.querySelectorAll('.constraint-input').forEach((el) => {
+        el.addEventListener('change', async (e) => {
+            const domain = e.target.dataset.domain;
+            const val = parseInt(e.target.value, 10) || 1;
+            constraints[domain].limit = val;
+            await setConstraints(constraints);
+            const usage = await getTodayUsage();
+            renderConstraints(constraints, usage);
+        });
+    });
+    container.querySelectorAll('.constraint-select').forEach((el) => {
+        el.addEventListener('change', async (e) => {
+            const domain = e.target.dataset.domain;
+            constraints[domain].unit = e.target.value;
+            await setConstraints(constraints);
+            const usage = await getTodayUsage();
+            renderConstraints(constraints, usage);
+        });
+    });
+    container.querySelectorAll('.constraint-toggle').forEach((el) => {
+        el.addEventListener('click', async (e) => {
+            const domain = e.target.dataset.domain;
+            constraints[domain].enabled = !constraints[domain].enabled;
+            await setConstraints(constraints);
+            const usage = await getTodayUsage();
+            renderConstraints(constraints, usage);
+        });
+    });
+    container.querySelectorAll('.constraint-delete').forEach((el) => {
+        el.addEventListener('click', async (e) => {
+            const domain = e.target.dataset.domain;
+            delete constraints[domain];
+            await setConstraints(constraints);
+            const usage = await getTodayUsage();
+            renderConstraints(constraints, usage);
+        });
+    });
+}
+
+async function updateHeaderStats(siteStats) {
+    const totals = computeDomainTotals(siteStats);
+    const totalSites = Object.keys(totals).length;
+    const totalTime = Object.values(totals).reduce((s, v) => s + (v.seconds || 0), 0);
+
+    const todayKey = getDateKey(0);
+    const todayTime = Object.values(siteStats[todayKey] || {}).reduce(
+        (s, v) => s + (v.seconds || 0),
+        0
+    );
+
+    const totalSitesEl = document.getElementById('totalSites');
+    const totalTimeEl = document.getElementById('totalTime');
+    const todayTimeEl = document.getElementById('todayTime');
+    if (totalSitesEl) totalSitesEl.textContent = totalSites;
+    if (totalTimeEl) totalTimeEl.textContent = formatSeconds(totalTime);
+    if (todayTimeEl) todayTimeEl.textContent = formatSeconds(todayTime);
+}
+
+function showStatus(msg, type = 'success') {
+    const statusEl = document.getElementById('status');
+    if (!statusEl) return;
+    statusEl.textContent = msg;
+    statusEl.style.color = type === 'error' ? '#dc2626' : '#16a34a';
+    setTimeout(() => {
+        statusEl.textContent = '';
+        statusEl.style.color = '#16a34a';
+    }, 2000);
+}
+
 /* ---------- Init ---------- */
 
 async function init() {
     const idleInput = document.getElementById('idleTimeout');
     const saveBtn = document.getElementById('saveBtn');
-    const statusEl = document.getElementById('status');
     const exportJsonBtn = document.getElementById('exportJsonBtn');
     const exportCsvBtn = document.getElementById('exportCsvBtn');
     const importFile = document.getElementById('importFile');
     const usageTimeRangeSelect = document.getElementById('usageTimeRange');
     const usageSortBySelect = document.getElementById('usageSortBy');
     const usageSearchBox = document.getElementById('usageSearchBox');
+    const addConstraintBtn = document.getElementById('addConstraintBtn');
+    const constraintDomainSelect = document.getElementById('constraintDomainSelect');
+    const constraintDomainInput = document.getElementById('constraintDomain');
+    const constraintLimitInput = document.getElementById('constraintLimit');
+    const constraintUnitSelect = document.getElementById('constraintUnit');
 
-    // Load settings
+    // Track latest site stats in-memory for reuse
+    let cachedSiteStats = {};
+
+    // Settings
     const settingsResp = await getSettings();
     const settings = settingsResp.settings;
-    idleInput.value = settings.idleTimeoutSeconds || 60;
+    if (idleInput) idleInput.value = settings.idleTimeoutSeconds || 60;
 
-    saveBtn.addEventListener('click', async () => {
-        const idleVal = parseInt(idleInput.value, 10) || 60;
-        await setSettings({ idleTimeoutSeconds: idleVal });
-        statusEl.textContent = 'Saved!';
-        statusEl.style.color = '#16a34a';
-        setTimeout(() => (statusEl.textContent = ''), 1500);
-    });
+    if (saveBtn) {
+        saveBtn.addEventListener('click', async () => {
+            const idleVal = parseInt(idleInput.value, 10) || 60;
+            await setSettings({ idleTimeoutSeconds: idleVal });
+            showStatus('Settings saved');
+        });
+    }
 
     // Export / Import
-    exportJsonBtn.addEventListener('click', async () => {
+    if (exportJsonBtn) {
+        exportJsonBtn.addEventListener('click', async () => {
+            const all = await getAllData();
+            downloadFile('timekeeper-export.json', JSON.stringify(all.data, null, 2), 'application/json');
+        });
+    }
+    if (exportCsvBtn) {
+        exportCsvBtn.addEventListener('click', async () => {
+            const all = await getAllData();
+            const csv = buildCsv(all.data.siteStats || {});
+            downloadFile('timekeeper-export.csv', csv, 'text/csv');
+        });
+    }
+    if (importFile) {
+        importFile.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+                await chrome.storage.local.set(data);
+                showStatus('Imported');
+                await refreshAll();
+            } catch (err) {
+                console.error(err);
+                showStatus('Import failed (invalid JSON)', 'error');
+            }
+        });
+    }
+
+    // Load and render
+    async function refreshAll() {
         const all = await getAllData();
-        downloadFile(
-            'timekeeper-export.json',
-            JSON.stringify(all.data, null, 2),
-            'application/json'
-        );
-    });
+        cachedSiteStats = all.data.siteStats || {};
+        await updateHeaderStats(cachedSiteStats);
+        updateUsageDisplay(cachedSiteStats);
+        const constraints = await getConstraints();
+        const usage = await getTodayUsage();
+        renderConstraints(constraints, usage);
+        populateConstraintSelect(cachedSiteStats);
+    }
 
-    exportCsvBtn.addEventListener('click', async () => {
-        const all = await getAllData();
-        const csv = buildCsv(all.data.siteStats || {});
-        downloadFile('timekeeper-export.csv', csv, 'text/csv');
-    });
-
-    importFile.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const text = await file.text();
-        try {
-            const data = JSON.parse(text);
-            await chrome.storage.local.set(data);
-            statusEl.textContent = 'Imported!';
-            statusEl.style.color = '#16a34a';
-            setTimeout(() => (statusEl.textContent = ''), 1500);
-        } catch (err) {
-            console.error(err);
-            statusEl.textContent = 'Import failed (invalid JSON)';
-            statusEl.style.color = 'red';
-            setTimeout(() => {
-                statusEl.textContent = '';
-                statusEl.style.color = '#16a34a';
-            }, 2000);
-        }
-    });
-
-    // Load usage data
-    const all = await getAllData();
-    const siteStats = all.data.siteStats || {};
-
-    // Render function (called on filter/sort/range change)
-    function updateUsageDisplay() {
-        const rangeType = usageTimeRangeSelect.value;
-        const sortBy = usageSortBySelect.value;
-        const searchTerm = usageSearchBox.value;
+    function updateUsageDisplay(siteStats) {
+        const rangeType = usageTimeRangeSelect?.value || 'all';
+        const sortBy = usageSortBySelect?.value || 'time-desc';
+        const searchTerm = usageSearchBox?.value || '';
         renderUsageGrid(siteStats, rangeType, sortBy, searchTerm);
     }
 
-    // Initial render
-    updateUsageDisplay();
+    function populateConstraintSelect(siteStats) {
+        if (!constraintDomainSelect) return;
+        const totals = computeDomainTotals(siteStats);
+        const domains = Object.keys(totals).sort();
+        const current = constraintDomainSelect.value;
+        constraintDomainSelect.innerHTML = '<option value=\"\">Select tracked site…</option>';
+        domains.forEach((d) => {
+            const opt = document.createElement('option');
+            opt.value = d;
+            opt.textContent = `${d} (${formatSeconds(totals[d].seconds || 0)})`;
+            constraintDomainSelect.appendChild(opt);
+        });
+        // restore selection if still present
+        if (current && domains.includes(current)) {
+            constraintDomainSelect.value = current;
+        }
+    }
 
     // Event listeners for usage controls
-    usageTimeRangeSelect.addEventListener('change', updateUsageDisplay);
-    usageSortBySelect.addEventListener('change', updateUsageDisplay);
-    usageSearchBox.addEventListener('input', updateUsageDisplay);
+    usageTimeRangeSelect?.addEventListener('change', async () => {
+        const all = await getAllData();
+        updateUsageDisplay(all.data.siteStats || {});
+    });
+    usageSortBySelect?.addEventListener('change', async () => {
+        const all = await getAllData();
+        updateUsageDisplay(all.data.siteStats || {});
+    });
+    usageSearchBox?.addEventListener('input', async () => {
+        const all = await getAllData();
+        updateUsageDisplay(all.data.siteStats || {});
+    });
+
+    // Constraint add
+    if (addConstraintBtn) {
+        addConstraintBtn.addEventListener('click', async () => {
+            const selected = constraintDomainSelect?.value || '';
+            const typed = (constraintDomainInput?.value || '').trim();
+            const domain = selected || typed;
+            const limit = parseInt(constraintLimitInput?.value || '0', 10);
+            const unit = constraintUnitSelect?.value || 'minutes';
+            if (!domain || isNaN(limit) || limit <= 0) {
+                showStatus('Enter a valid domain and limit', 'error');
+                return;
+            }
+            const constraints = await getConstraints();
+            constraints[domain] = { domain, limit, unit, enabled: true };
+            await setConstraints(constraints);
+            const usage = await getTodayUsage();
+            renderConstraints(constraints, usage);
+            if (constraintDomainInput) constraintDomainInput.value = '';
+            if (constraintDomainSelect) constraintDomainSelect.value = '';
+            if (constraintLimitInput) constraintLimitInput.value = '30';
+            if (constraintUnitSelect) constraintUnitSelect.value = 'minutes';
+            showStatus('Constraint added');
+        });
+    }
+
+    // Initial draw + periodic refresh
+    await refreshAll();
+    setInterval(refreshAll, 60_000); // refresh every minute
 }
 
 document.addEventListener('DOMContentLoaded', init);

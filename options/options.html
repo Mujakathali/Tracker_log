@@ -2,21 +2,57 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>TimeKeeper Settings</title>
+  <title>TimeKeeper Dashboard</title>
   <link rel="stylesheet" href="options.css" />
 </head>
 <body>
   <div class="page">
     <header class="page-header">
-      <div>
-        <h1>TimeKeeper Settings</h1>
-        <p class="subtitle">
-          Configure tracking and explore which sites you spend the most time on.
-        </p>
+      <div class="header-content">
+        <div class="header-text">
+          <h1>TimeKeeper Dashboard</h1>
+          <p class="subtitle">Track, analyze, and optimize your browsing habits.</p>
+        </div>
+        <div class="header-stats" id="headerStats">
+          <div class="stat-card">
+            <div class="stat-value" id="totalSites">--</div>
+            <div class="stat-label">Sites Tracked</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="totalTime">--</div>
+            <div class="stat-label">Total Time</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="todayTime">--</div>
+            <div class="stat-label">Today</div>
+          </div>
+        </div>
       </div>
     </header>
 
     <main class="page-main">
+      <!-- Time Constraints -->
+      <section class="card">
+        <h2 class="card-title">Time Constraints</h2>
+        <p class="card-description">Set daily time limits for websites to prevent overuse.</p>
+        <div id="constraintsList"></div>
+        <div class="add-constraint">
+          <h3>Add New Constraint</h3>
+          <div class="constraint-form">
+            <select id="constraintDomainSelect">
+              <option value="">Select tracked site…</option>
+            </select>
+            <input type="text" id="constraintDomain" placeholder="Or type domain (e.g., youtube.com)" />
+            <input type="number" id="constraintLimit" placeholder="30" min="1" />
+            <select id="constraintUnit">
+              <option value="minutes">Minutes</option>
+              <option value="hours">Hours</option>
+            </select>
+            <button id="addConstraintBtn" class="primary-button">Add Constraint</button>
+          </div>
+        </div>
+      </section>
+
       <!-- General settings -->
       <section class="card">
         <h2 class="card-title">General</h2>
@@ -82,10 +118,10 @@
           <div class="control-group">
             <label for="usageTimeRange" class="control-label">Range:</label>
             <select id="usageTimeRange" class="control-select">
-              <option value="all">All time</option>
-              <option value="30days">Last 30 days</option>
-              <option value="7days">Last 7 days</option>
               <option value="today">Today</option>
+              <option value="7days">Last 7 days</option>
+              <option value="30days">Last 30 days</option>
+              <option value="all">All time</option>
             </select>
           </div>
 
@@ -115,7 +151,6 @@
       </section>
     </main>
   </div>
-
   <script src="options.js"></script>
 </body>
 </html>
